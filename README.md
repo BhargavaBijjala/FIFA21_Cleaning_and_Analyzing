@@ -3,3 +3,5 @@ Welcome to my comprehensive exploration of the FIFA 21 Dataset, available throug
 
 My goal is to present you with a clean and reliable dataset, free from errors and anomalies.Once our data is primed for analysis, I will also delve on analyzing player attributes, identifying standout performers, and exploring intriguing patterns within the data.
 
+You can find the R markdwon file [here](Fifa21_Cleaned_Markdown.nb.html)
+
