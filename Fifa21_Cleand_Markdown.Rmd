@@ -1,0 +1,136 @@
+---
+title: "FIFA21_Cleaning and Analyzing"
+output: html_notebook
+  toc: true
+    toc_depth: 2
+Author : Bhargava Sai Bijjala
+Date : 2nd July 2023
+---
+
+#FIFA21 Data cleaning and Analyzing
+
+##Intorduction 
+
+Welcome to a comprehensive exploration of the FIFA 21 Dataset, available through [Kaggle's] public datasets library. This dataset, originally scraped from sofifa.com, provides a rich collection of football data that holds immense potential for analysis. In this article, I will focus on the essential task of cleaning and preparing the dataset, ensuring its accuracy and usability for further analysis.
+
+My goal is to present you with a clean and reliable dataset, free from errors and anomalies.Once our data is primed for analysis, I will delve on analyzing player attributes, identifying standout performers, and exploring intriguing patterns within the data.
+
+###Required Packages
+```{r}
+install.packages(c("tidyverse", "dplyr", "wordcloud", "ggplot2"))
+
+```
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(wordcloud)
+library(ggplot2)
+
+```
+
+###Data Preprocessing
+
+```{r}
+df <- read_csv("fifa21_raw_data.csv")
+df2 <- df
+
+```
+```{r}
+#removing unneccessary columns 
+df2 <- df2[,-c(1,3,6)]
+
+#Converting the Height and weight columns into numeric
+
+df2 <- df2 %>% separate(Height, into = c("feet", "inches"), sep = "'", convert = TRUE, fill = "right")
+df2$inches <- gsub("\"", "", df2$inches)
+df2$feet <- as.numeric(df2$feet)
+df2$inches <- as.numeric(df2$inches)
+df2$Height <- df2$feet*30.48 + df2$inches*2.54
+df2 <- subset(df2, select = -c(feet, inches))
+
+df2$Weight <- gsub("lbs", "", df2$Weight)
+df2$Weight <- as.numeric(df2$Weight)
+
+# Cleaning columns of any newline characters
+df2 <- df2 %>% mutate_all(~str_replace(., "\\s+", ""))
+
+# Converting Joined column to Date format
+df2$Joined <- as.Date(df2$Joined, format = "%b%d,%Y")
+
+# Cleaning columns with special characters
+df2$`W/F` <- gsub("★", "", df2$`W/F`)
+df2 <- df2 %>% mutate(across(c(SM, IR), ~ gsub("★", "", .)))
+```
+
+###Analysis
+
+```{r}
+#Country wise player count 
+
+player_country_count <- table(df2$Nationality)
+player_country_count <- sort(player_country_count, decreasing = TRUE)
+
+#Ratio of left and right footed players
+
+Right_foot <- sum(df2$foot == "Right")
+Left_foot <- sum(df2$foot == "Left")
+TF <- Left_foot + Right_foot
+Left_foot <- (Left_foot/TF)*100
+Right_foot <- (Right_foot/TF)*100
+
+#Tallest players
+
+top_5_tallest <- df2 %>% top_n(5, Height) %>% arrange(desc(Height)) %>% select(LongName, Height, '↓OVA', foot, Age, BP, Nationality)
+
+#Fastest players based on Accelaration 
+
+top_5_fastest <- df2 %>% top_n(5, Acceleration) %>% arrange(desc(Acceleration)) %>% select(LongName, '↓OVA', Age, `Sprint Speed`, BP, Nationality)
+
+#Best Attackers
+
+df2$Attacking <- as.numeric(df2$Attacking)
+df2$Finishing <- as.numeric(df2$Finishing)
+
+top_attackers <- df2 %>% top_n(5,Attacking + Finishing) %>% arrange(desc(Attacking)) %>% select(LongName,BP,OVA,Attacking,Finishing,Age,Nationality)
+
+
+#Best defenders
+
+df2$Defending <- as.numeric(df2$Defending)
+df2$`Standing Tackle` <- as.numeric(df2$`Standing Tackle`)
+df2$`Sliding Tackle` <- as.numeric(df2$`Sliding Tackle`)
+df2$Marking <- as.numeric(df2$Marking)
+
+best_defender <- df2 %>%
+  slice_max(Defending + `Standing Tackle` + `Sliding Tackle` + Marking, n = 5) %>%
+  arrange(desc(Defending)) %>%
+  select(LongName, Age, '↓OVA', Defending, BP, `Standing Tackle`, `Sliding Tackle`, Marking, Nationality)
+
+#Strongest players
+
+df2$Strength <- as.numeric(df2$Strength)
+
+strongest_players <- df2 %>% top_n(5, Strength) %>% arrange(desc(Strength)) %>% select(LongName, Age, Strength, BP, Height, Weight, Stamina, Nationality)
+
+#Top paid players 
+
+df2$Wage <- as.numeric(df2$Wage)
+
+top_paid <- df2 %>% top_n(5, Wage) %>% arrange(desc(Wage)) %>% select(LongName, Wage, Age, BP, Nationality)
+
+#Top valuable players
+
+top_valuable_players <- df2 %>% top_n(5,Value+Wage) %>% arrange(desc(Value)) %>% select(LongName,BP,Value,Wage,OVA,Nationality)
+
+#Less paid players
+
+less_paid <- df2 %>% mutate(ValueToWAge = Value/Wage) %>% arrange(desc(ValueToWAge)) %>% select(LongName,BP,Value,Wage,Nationality) %>% head(5)
+
+
+#Best future prospects
+
+best_prospects <- df2 %>% mutate(Potential_Difference = POT -OVA) %>% arrange(desc(Potential_Difference),desc(Value)) %>% select(LongName,BP,Value,POT,Nationality) %>% head(5)
+
+```
+
