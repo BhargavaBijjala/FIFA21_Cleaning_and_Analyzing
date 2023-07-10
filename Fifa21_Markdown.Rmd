@@ -1,0 +1,270 @@
+---
+title: "FIFA21 Cleaning and Analyzing"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+Author: Bhargava Sai Bijjala
+Date: 2nd July 2023
+---
+
+# Intorduction 
+
+Welcome to a comprehensive exploration of the FIFA 21 Dataset, available through [Kaggle's](https://www.kaggle.com/datasets/yagunnersya/fifa-21-messy-raw-dataset-for-cleaning-exploring?select=fifa21_raw_data.csv%E2%80%8B) public datasets library. This dataset, originally scraped from sofifa.com, provides a rich collection of football data that holds immense potential for analysis. In this article, I will focus on the essential task of cleaning and preparing the dataset, ensuring its accuracy and usability for further analysis.
+
+My goal is to present you with a clean and reliable dataset, free from errors and anomalies.Once our data is primed for analysis, I will delve on analyzing player attributes, identifying standout performers, and exploring intriguing patterns within the data.
+
+## Required Packages
+```{r}
+install.packages(c("tidyverse", "dplyr", "wordcloud", "ggplot2","knitr"))
+
+```
+
+```{r}
+library(tidyverse)
+library(dplyr)
+library(wordcloud)
+library(ggplot2)
+library(knitr)
+
+
+```
+
+## Data Preprocessing
+
+```{r}
+df <- read_csv("fifa21_raw_data.csv")
+df2 <- df
+
+```
+```{r}
+#removing unnecessary columns 
+df2 <- df2[,-c(1,3,6)]
+
+#Converting the Height and weight columns into numeric
+
+df2 <- df2 %>% separate(Height, into = c("feet", "inches"), sep = "'", convert = TRUE, fill = "right")
+df2$inches <- gsub("\"", "", df2$inches)
+df2$feet <- as.numeric(df2$feet)
+df2$inches <- as.numeric(df2$inches)
+df2$Height <- df2$feet*30.48 + df2$inches*2.54
+df2 <- subset(df2, select = -c(feet, inches))
+
+df2$Weight <- gsub("lbs", "", df2$Weight)
+df2$Weight <- as.numeric(df2$Weight)
+
+# Cleaning columns of any newline characters
+df2 <- df2 %>% mutate_all(~str_replace(., "\\s+", ""))
+
+# Converting Joined column to Date format
+df2$Joined <- as.Date(df2$Joined, format = "%b%d,%Y")
+
+# Cleaning columns with special characters
+df2$`W/F` <- gsub("★", "", df2$`W/F`)
+df2 <- df2 %>% mutate(across(c(SM, IR), ~ gsub("★", "", .)))
+
+#Changing name of the overall column name
+
+colnames(df2)[colnames(df2) == "↓OVA"] <- "OVA"
+
+#Making the names more readable
+
+df2$LongName <- ifelse(grepl("([[:lower:]])([[:upper:]])", df2$LongName),gsub("([[:lower:]])([[:upper:]])", "\\1 \\2", df2$LongName),df$LongName)
+                      
+#Converting Value, Wage and Release clause into Numeric
+
+df2$`Release Clause` <- gsub("€","",df2$`Release Clause`)
+
+df2$'Release Clause' <- ifelse(grepl("M", df2$'Release Clause'),as.numeric(gsub("M", "", df2$'Release Clause'))*1000000,ifelse(grepl("K",df2$'Release Clause'),as.numeric(gsub("K", "", df2$'Release Clause')) * 1000, df2$'Release Clause'))
+
+df2$`Release Clause` <- as.numeric(df2$`Release Clause`)
+
+df2$Value <- gsub("€","",df2$Value)
+
+df2$Value<- ifelse(grepl("M", df2$Value),as.numeric(gsub("M", "", df2$Value))*1000000,ifelse(grepl("K",df2$Value),as.numeric(gsub("K", "", df2$Value)) * 1000, df2$Value))
+
+df2$Value <- as.numeric(df2$Value)
+
+df2$Wage <- gsub("€","",df2$Wage)
+
+df2$Wage <- ifelse(grepl("K",df2$Wage),as.numeric(gsub("K","",df2$Wage))*1000,df2$Wage)
+
+df2$Wage <- as.numeric(df2$Wage)
+
+```
+
+
+## Analysis
+
+### Country wise player count 
+
+```{r}
+
+player_country_count <- table(df2$Nationality)
+player_country_count <- sort(player_country_count, decreasing = TRUE)
+head(player_country_count,20)
+```
+### Ratio of left and right footed players
+
+```{r}
+
+Right_foot <- sum(df2$foot == "Right")
+Left_foot <- sum(df2$foot == "Left")
+TF <- Left_foot + Right_foot
+Left_foot <- (Left_foot/TF)*100
+Right_foot <- (Right_foot/TF)*100
+print(Left_foot)
+print(Right_foot)
+```
+### Tallest players
+
+
+```{r}
+
+top_5_tallest <- df2 %>% top_n(5, Height) %>% arrange(desc(Height)) %>% select(LongName,Age,BP,Height,Nationality)
+top_5_tallest
+```
+### Fastest players based on Acceleration 
+
+```{r}
+
+top_5_fastest <- df2 %>% top_n(5, Acceleration) %>% arrange(desc(Acceleration)) %>% select(LongName, OVA, Age, `Sprint Speed`, BP, Nationality)
+top_5_fastest
+```
+### Best Attackers
+
+```{r}
+
+df2$Attacking <- as.numeric(df2$Attacking)
+df2$Finishing <- as.numeric(df2$Finishing)
+
+top_attackers <- df2 %>% top_n(5,Attacking + Finishing) %>% arrange(desc(Attacking)) %>% select(LongName,BP,OVA,Attacking,Finishing,Age,Nationality)
+
+top_attackers
+```
+### Best defenders
+
+```{r}
+
+df2$Defending <- as.numeric(df2$Defending)
+df2$`Standing Tackle` <- as.numeric(df2$`Standing Tackle`)
+df2$`Sliding Tackle` <- as.numeric(df2$`Sliding Tackle`)
+df2$Marking <- as.numeric(df2$Marking)
+
+best_defender <- df2 %>%
+  slice_max(Defending + `Standing Tackle` + `Sliding Tackle` + Marking, n = 5) %>%
+  arrange(desc(Defending)) %>%
+  select(LongName, Age,OVA, Defending, BP, `Standing Tackle`, `Sliding Tackle`, Marking, Nationality)
+
+best_defender
+
+```
+### Strongest players
+
+```{r}
+
+df2$Strength <- as.numeric(df2$Strength)
+
+strongest_players <- df2 %>% top_n(5, Strength) %>% arrange(desc(Strength)) %>% select(LongName, Age, Strength, BP, Height, Weight, Stamina, Nationality)
+
+strongest_players
+```
+
+
+### Top paid players 
+```{r}
+
+df2$Wage <- as.numeric(df2$Wage)
+
+top_paid <- df2 %>% top_n(5, Wage) %>% arrange(desc(Wage)) %>% select(LongName, Wage, Age, BP, Nationality)
+
+top_paid
+```
+### Top valuable players
+
+```{r}
+
+df2$Value <- as.numeric(df2$Value)
+df2$Wage <- as.numeric(df2$Wage)
+
+top_valuable_players <- df2 %>% top_n(5,Value+Wage) %>% arrange(desc(Value)) %>% select(LongName,BP,Value,Wage,OVA,Nationality)
+
+
+top_valuable_players
+```
+
+### Under paid players
+
+```{r}
+under_paid <- df2 %>% mutate(ValueToWAge = Value/Wage) %>% arrange(desc(ValueToWAge)) %>% select(LongName,BP,Value,Wage,Nationality) %>% head(5)
+
+under_paid
+```
+
+### Best future prospects
+
+```{r}
+
+df2$POT <- as.numeric(df2$POT)
+df2$OVA <- as.numeric(df2$OVA)
+
+best_prospects <- df2 %>% mutate(Potential_Difference = POT -OVA) %>% arrange(desc(Potential_Difference),desc(Value)) %>% select(LongName,BP,Value,POT,Nationality) %>% head(5)
+
+best_prospects
+
+```
+
+
+# Visualizaitons 
+
+### Plotting players by their nationality
+
+```{r,fig.show='hold'}
+library(ggplot2)
+top_countries <- head(player_country_count , 15)
+colors <- c("red", "blue", "green", "orange", "purple", "yellow", "cyan", "pink", "gray", "brown", "magenta", "navy", "maroon")
+
+bar_plot <-barplot(top_countries , main ="Player distribution by nationality" , xlab = "" , ylab = "" , col = colors , las =2)
+```
+
+### Histogram by Age 
+
+```{r}
+df2$Age <- as.numeric(df2$Age)
+hist(df2$Age, main = "Distribution of Age" , xlab = "Age" ,ylab = "Frequency" , col = "lightblue" , border = "darkblue")
+```
+
+### Scatterplot to compare "Overall rating" and "Value" 
+
+
+```{r}
+
+max_value <- max(df2$Value, na.rm = TRUE)  # Find the maximum value
+
+plot(df2$OVA , df2$Value ,main = "Overall ratings vs Value" , xlab = "Overall rating" , ylab = "Value" , col = "blue" , pch = 10 , ylim = c(0,max_value) )
+```
+
+### Pie chart representing left and right footed players
+
+```{r}
+labels <- c("Left foot" ,"Right foot")
+values <- c(Left_foot , Right_foot)
+colors <- c("blue","red")
+
+pie(values, labels = paste(labels, paste0("(", round(values, 1), "%)")), col = colors , main = "Left foot vs Right foot distribution")
+```
+
+
+# Conclusion 
+
+In this analysis of the FIFA 21 dataset, we performed comprehensive data cleaning to ensure accuracy and usability. We removed unnecessary columns, converted height and weight into numeric format, cleaned columns with special characters, and transformed value and wage columns into numeric values.
+
+After preparing the data, we explored various aspects of player information. We examined the country-wise distribution of players, analyzed the ratio of left and right-footed players, identified the tallest and fastest players, highlighted the best attackers and defenders, and discovered the strongest players. We also investigated the top paid and valuable players, identified undervalued players, and highlighted the best future prospects.
+
+To visually represent the data, we created bar plots, histograms, scatterplots, and pie charts. These visualizations provided a clear understanding of player distribution, age distribution, overall ratings versus value, and the distribution of left and right-footed players.
+
+This analysis offers valuable insights for football enthusiasts, data analysts, and industry recruiters. By exploring player attributes and market values, this analysis provides a deeper understanding of player characteristics and performance in the FIFA 21 dataset.
+
+
+
+
